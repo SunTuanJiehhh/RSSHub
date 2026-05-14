@@ -2,7 +2,7 @@ import { load } from 'cheerio';
 
 import type { Route } from '@/types';
 import cache from '@/utils/cache';
-import ofetch from '@/utils/ofetch';
+import got from '@/utils/got';
 import { parseDate } from '@/utils/parse-date';
 
 export const route: Route = {
@@ -18,14 +18,12 @@ export const route: Route = {
 async function handler() {
     const apiUrl = 'https://data.mjzj.com/api/Article/Search';
 
-    const response = await ofetch(apiUrl, {
-        method: 'POST',
+    const { data: response } = await got.post(apiUrl, {
         headers: {
             'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
-            'Content-Type': 'application/json',
             Referer: 'https://m.mjzj.com/',
         },
-        body: JSON.stringify({ page: 1, pageSize: 20 }),
+        json: { page: 1, pageSize: 20 },
     });
 
     const list = (response.list || []).map((item) => ({
@@ -41,7 +39,7 @@ async function handler() {
         list.map((item) =>
             cache.tryGet(item.link, async () => {
                 try {
-                    const detailResponse = await ofetch(item.link, {
+                    const { data: detailResponse } = await got(item.link, {
                         headers: {
                             'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
                         },
