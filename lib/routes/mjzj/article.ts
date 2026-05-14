@@ -16,57 +16,45 @@ export const route: Route = {
 };
 
 async function handler() {
-    const url = 'https://m.mjzj.com/';
+    const apiUrl = 'https://data.mjzj.com/api/Article/Search';
 
-    const response = await ofetch(url, {
+    const response = await ofetch(apiUrl, {
+        method: 'POST',
         headers: {
             'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
+            'Content-Type': 'application/json',
+            Referer: 'https://m.mjzj.com/',
         },
+        body: JSON.stringify({ page: 1, pageSize: 20 }),
     });
 
-    const $ = load(response);
-
-    const list = $('a[href*="/article/"]')
-        .toArray()
-        .map((item) => {
-            const $item = $(item);
-            const href = $item.attr('href');
-            const match = href?.match(/\/article\/([a-z0-9]+)/);
-            if (!match) {
-                return null;
-            }
-            const title = $item.text().trim();
-            return {
-                title,
-                link: href.startsWith('http') ? href : `https://m.mjzj.com${href}`,
-            };
-        })
-        .filter(Boolean)
-        .filter((item) => item.title && item.title.length > 5)
-        .filter((item, index, self) => index === self.findIndex((t) => t.link === item.link))
-        .slice(0, 20);
+    const list = (response.list || []).map((item) => ({
+        title: item.title,
+        link: item.articleMobileUrl || `https://m.mjzj.com/article/${item.id}`,
+        pubDate: parseDate(item.publishDateTime?.htmlInputString || item.publishTime),
+        author: item.author?.name,
+        category: item.tags,
+        summary: item.summary || item.aiSummary,
+    }));
 
     const items = await Promise.all(
         list.map((item) =>
             cache.tryGet(item.link, async () => {
-                const detailResponse = await ofetch(item.link, {
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
-                    },
-                });
+                try {
+                    const detailResponse = await ofetch(item.link, {
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
+                        },
+                    });
 
-                const $detail = load(detailResponse);
+                    const $detail = load(detailResponse);
+                    const content = $detail('.article-content').html();
 
-                const titleText = $detail('title').text().trim();
-                if (titleText) {
-                    item.title = titleText;
-                }
-
-                item.description = $detail('.article-content').html() || '';
-
-                const dateMatch = detailResponse.match(/(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2})/);
-                if (dateMatch) {
-                    item.pubDate = parseDate(dateMatch[1]);
+                    if (content) {
+                        item.description = content;
+                    }
+                } catch {
+                    item.description = item.summary || '';
                 }
 
                 return item;
@@ -76,7 +64,7 @@ async function handler() {
 
     return {
         title: '卖家之家 - 资讯',
-        link: url,
+        link: 'https://m.mjzj.com/',
         item: items,
     };
 }
